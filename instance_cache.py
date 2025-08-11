@@ -36,11 +36,12 @@ delete!
 import functools
 # import inspect
 import keyword
-import threading
+from collections import OrderedDict
+from threading import Lock
 from typing import Callable, Optional
 
-# python >= 3.7.0
-__version__ = '0.1.0'
+# python >= 3.6.0
+__version__ = '0.1.1'
 
 __all__ = ['instance_cache']
 
@@ -75,7 +76,7 @@ def instance_cache(max_size: Optional[int] = 128, cache_name: Optional[str] = No
     1
     >>> foo.method(1, 2)  # 命中缓存, 不运行方法直接返回结果
     1
-    >>> foo.method_cached.clear()  # 清空实例的结果缓存
+    >>> # foo.method_cached.clear()  # 清空实例的结果缓存
     >>> del foo  # 会立刻进行垃圾回收
     delete!
 
@@ -105,7 +106,7 @@ def instance_cache(max_size: Optional[int] = 128, cache_name: Optional[str] = No
             raise ValueError(f'invalid variable name: {cache_name}')
 
     if max_size is not None:
-        if max_size < 0:
+        if max_size <= 0:
             # 不缓存
             def decorator(method):
                 return method
@@ -117,14 +118,14 @@ def instance_cache(max_size: Optional[int] = 128, cache_name: Optional[str] = No
             import inspect
 
             sig = inspect.signature(method)
-        lock = threading.Lock()
+        lock = Lock()
 
         @functools.wraps(method)
         def cached_method(self, *args, **kwargs):
             # 获取线程锁
             with lock:
                 if not hasattr(self, lock_name):
-                    setattr(self, lock_name, threading.Lock())
+                    setattr(self, lock_name, Lock())
 
             cache_lock = getattr(self, lock_name)
 
@@ -148,33 +149,33 @@ def instance_cache(max_size: Optional[int] = 128, cache_name: Optional[str] = No
             with cache_lock:
                 # 获取缓存字典
                 if not hasattr(self, cache_method_name):
-                    setattr(self, cache_method_name, {})
+                    setattr(self, cache_method_name, OrderedDict())
                 cache_dict = getattr(self, cache_method_name)
-                if not isinstance(cache_dict, dict):
-                    cache_dict = {}
+                if not isinstance(cache_dict, OrderedDict):
+                    cache_dict = OrderedDict()
                     setattr(self, cache_method_name, cache_dict)
 
-                # 检查是否存在缓存
+                # 检查是否命中缓存
                 if key in cache_dict:
-                    value = cache_dict.pop(key)
-                    cache_dict[key] = value  # 弹出再放入, 顺序调到最后
+                    cache_dict.move_to_end(key, last=True)
+                    value = cache_dict[key]
                     return value
 
             # 获取值
             value = method(self, *args, **kwargs)
 
             with cache_lock:
-                # 检查是否存在缓存
+                # 检查是否命中缓存
                 if key in cache_dict:
-                    value = cache_dict.pop(key)
-                    cache_dict[key] = value  # 弹出再放入, 顺序调到最后
+                    cache_dict.move_to_end(key, last=True)
+                    value = cache_dict[key]
                     return value
 
                 # 缓存结果
                 cache_dict[key] = value
                 if max_size is not None:
                     while cache_dict and len(cache_dict) > max_size:
-                        del cache_dict[next(iter(cache_dict))]
+                        cache_dict.popitem(last=False)
 
             return value
 
