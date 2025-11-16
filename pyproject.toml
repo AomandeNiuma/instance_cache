@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "instance_cache"
-version = "0.2.0"
-description = "为类方法提供实例级的结果缓存, 不影响类实例正常垃圾回收的装饰器"
+version = "0.2.1"
+description = "为类实例方法提供实例级的结果缓存, 不影响类实例正常垃圾回收的装饰器"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.7.0"
 authors = [
